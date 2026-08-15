@@ -26,6 +26,13 @@ jobs:
       - name: Instalar navegador de Playwright
         run: playwright install --with-deps chromium
 
+      - name: Verificar ffmpeg
+        run: |
+          if ! command -v ffmpeg &> /dev/null; then
+            sudo apt-get update && sudo apt-get install -y ffmpeg
+          fi
+          ffmpeg -version
+
       - name: Restaurar credenciales desde Secrets
         run: |
           mkdir -p credentials
@@ -45,5 +52,14 @@ jobs:
         with:
           name: capturas
           path: capturas/
+          if-no-files-found: ignore
+          retention-days: 3
+
+      - name: Subir videos como artifact (temporal, para revisar visualmente)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: videos
+          path: videos/
           if-no-files-found: ignore
           retention-days: 3

@@ -106,6 +106,25 @@ def obtener_views_canal(canal_nombre: str, canal_youtube_id: str) -> int:
     return int(items[0]["statistics"]["viewCount"])
 
 
+def obtener_estadisticas_canal(canal_nombre: str, canal_youtube_id: str) -> dict:
+    """Devuelve views y suscriptores actuales del canal en una sola llamada."""
+    youtube = obtener_youtube_client(canal_nombre)
+    respuesta = (
+        youtube.channels()
+        .list(part="statistics", id=canal_youtube_id)
+        .execute()
+    )
+    items = respuesta.get("items", [])
+    if not items:
+        raise RuntimeError(f"No se encontro el canal {canal_youtube_id}")
+
+    stats = items[0]["statistics"]
+    return {
+        "views": int(stats["viewCount"]),
+        "suscriptores": int(stats.get("subscriberCount", 0)),
+    }
+
+
 def subir_video(
     canal_nombre: str,
     archivo_path: str,

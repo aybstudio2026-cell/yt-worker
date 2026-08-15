@@ -4,3 +4,5 @@ __pycache__/
 venv/
 credentials/
 capturas/
+videos/
+audio_cache/

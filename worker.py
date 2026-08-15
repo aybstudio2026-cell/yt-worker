@@ -19,13 +19,16 @@ import os
 import sys
 import traceback
 from datetime import datetime, timedelta
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 from supabase import create_client, Client
 
-from youtube_api import obtener_views_canal, formatear_views
+from youtube_api import obtener_estadisticas_canal, formatear_views, subir_video
 from capture import capturar_analytics
+from video_generator import generar_contador_animado
+from audio_utils import resolver_audio
 
 load_dotenv()
 
@@ -117,31 +120,59 @@ def procesar_horario(supabase: Client, canal: dict, horario: dict):
     publicacion_id = publicacion.data[0]["id"]
 
     try:
-        # 1. Obtener views reales del canal vía YouTube Data API
-        views = obtener_views_canal(canal["nombre"], canal["canal_youtube_id"])
-        views_formateadas = formatear_views(views)
-        print(f"     Views actuales: {views} ({views_formateadas})")
+        # 1. Obtener estadisticas reales del canal vía YouTube Data API
+        stats = obtener_estadisticas_canal(canal["nombre"], canal["canal_youtube_id"])
+        views = stats["views"]
+        subs = stats["suscriptores"]
+        print(f"     Views actuales: {views} | Suscriptores: {subs}")
 
-        # 2. Captura real de pantalla de YouTube Studio (modo móvil)
-        captura_path = f"capturas/{publicacion_id}.png"
-        capturar_analytics(canal["nombre"], canal["canal_youtube_id"], captura_path)
-        print(f"     Captura guardada en: {captura_path}")
+        formato = canal.get("formato_video", "views_actuales")
+        video_path = f"videos/{publicacion_id}.mp4"
+        log_extra = ""
 
-        # --- Los siguientes pasos se agregan en los proximos cambios: ---
-        # 3. FFmpeg/Pillow: generar el video con overlay usando views_formateadas
-        #    y la captura en captura_path
-        # 4. YouTube Data API: subir el video real (subir_video de youtube_api.py)
-        #
-        # Por ahora guardamos views + confirmacion de captura, sin video todavia:
-        url_pendiente = "PENDIENTE - falta generar y subir el video"
+        if formato == "contador_animado":
+            audio_path = resolver_audio(canal.get("musica_ruta"))
+
+            # Genera el video real (sin necesitar captura de pantalla)
+            generar_contador_animado(
+                views_actuales=views,
+                subs_actuales=subs,
+                audio_path=audio_path,
+                output_path=video_path,
+                duracion_seg=5,
+            )
+            print(f"     Video generado: {video_path}")
+
+            titulo = canal["titulo_formato"].replace(
+                "{views}", formatear_views(views)
+            )
+            url_final = subir_video(
+                canal_nombre=canal["nombre"],
+                archivo_path=video_path,
+                titulo=titulo,
+                descripcion=canal["hashtags"],
+                tags=canal["hashtags"].replace("#", "").split(),
+            )
+            print(f"     Video subido: {url_final}")
+            log_extra = f"Video generado y subido OK ({formato})."
+
+        else:
+            # Otros formatos (grafico_crecimiento, comparativa_semanal, etc.)
+            # todavia no tienen generador implementado. Por ahora solo
+            # capturamos pantalla y dejamos el video pendiente.
+            captura_path = f"capturas/{publicacion_id}.png"
+            capturar_analytics(canal["nombre"], canal["canal_youtube_id"], captura_path)
+            print(f"     Captura guardada en: {captura_path} (formato '{formato}' aun no genera video)")
+            url_final = f"PENDIENTE - formato '{formato}' aun no implementado"
+            log_extra = f"Captura OK. Formato '{formato}' aun no tiene generador de video."
 
         supabase.table("publicaciones").update(
             {
                 "estado": "publicado",
                 "fecha_ejecucion": ahora().isoformat(),
                 "views_capturadas": views,
-                "url_video_resultante": url_pendiente,
-                "log": f"Views reales OK. Captura OK ({captura_path}). Falta generar/subir video.",
+                "url_video_resultante": url_final,
+                "log": log_extra,
             }
         ).eq("id", publicacion_id).execute()
 
