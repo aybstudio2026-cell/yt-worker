@@ -5,3 +5,4 @@ google-auth-oauthlib==1.2.1
 google-api-python-client==2.149.0
 playwright==1.48.0
 yt-dlp==2024.10.22
+Pillow==11.0.0
