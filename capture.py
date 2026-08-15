@@ -48,6 +48,18 @@ def capturar_analytics(canal_nombre: str, canal_youtube_id: str, salida_path: st
         url = f"https://studio.youtube.com/channel/{canal_youtube_id}/analytics/tab-overview/period-default"
         page.goto(url, wait_until="networkidle", timeout=60000)
 
+        # YouTube Studio a veces muestra un interstitial sugiriendo
+        # descargar la app nativa cuando detecta un viewport movil.
+        # Si aparece, saltamos con el enlace de texto "Ir a Studio".
+        try:
+            enlace_ir_a_studio = page.get_by_text("IR A STUDIO", exact=False)
+            if enlace_ir_a_studio.is_visible(timeout=5000):
+                enlace_ir_a_studio.click()
+                page.wait_for_timeout(2000)
+        except Exception:
+            # Si no aparece el interstitial, seguimos normalmente
+            pass
+
         # Espera a que el dashboard cargue de verdad (evita capturar una pantalla vacia/loading)
         page.wait_for_timeout(4000)
 
