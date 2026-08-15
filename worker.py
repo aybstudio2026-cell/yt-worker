@@ -25,6 +25,7 @@ from dotenv import load_dotenv
 from supabase import create_client, Client
 
 from youtube_api import obtener_views_canal, formatear_views
+from capture import capturar_analytics
 
 load_dotenv()
 
@@ -121,12 +122,17 @@ def procesar_horario(supabase: Client, canal: dict, horario: dict):
         views_formateadas = formatear_views(views)
         print(f"     Views actuales: {views} ({views_formateadas})")
 
+        # 2. Captura real de pantalla de YouTube Studio (modo móvil)
+        captura_path = f"capturas/{publicacion_id}.png"
+        capturar_analytics(canal["nombre"], canal["canal_youtube_id"], captura_path)
+        print(f"     Captura guardada en: {captura_path}")
+
         # --- Los siguientes pasos se agregan en los proximos cambios: ---
-        # 2. Playwright: captura de pantalla de YouTube Studio (modo movil)
         # 3. FFmpeg/Pillow: generar el video con overlay usando views_formateadas
+        #    y la captura en captura_path
         # 4. YouTube Data API: subir el video real (subir_video de youtube_api.py)
         #
-        # Por ahora solo guardamos las views reales, sin video todavia:
+        # Por ahora guardamos views + confirmacion de captura, sin video todavia:
         url_pendiente = "PENDIENTE - falta generar y subir el video"
 
         supabase.table("publicaciones").update(
@@ -135,11 +141,11 @@ def procesar_horario(supabase: Client, canal: dict, horario: dict):
                 "fecha_ejecucion": ahora().isoformat(),
                 "views_capturadas": views,
                 "url_video_resultante": url_pendiente,
-                "log": "Views reales obtenidas OK. Falta captura/video/subida real.",
+                "log": f"Views reales OK. Captura OK ({captura_path}). Falta generar/subir video.",
             }
         ).eq("id", publicacion_id).execute()
 
-        print(f"     Views registradas OK")
+        print(f"     Paso completado OK")
 
     except Exception as e:
         error_texto = f"{type(e).__name__}: {e}\n{traceback.format_exc()}"
