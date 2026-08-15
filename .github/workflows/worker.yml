@@ -1,0 +1,37 @@
+name: YT Automation Worker
+
+on:
+  schedule:
+    # Corre cada 10 minutos. GitHub usa UTC, no hora local.
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+    # Permite ejecutarlo manualmente desde la pestaña "Actions" de GitHub,
+    # util para probar sin esperar al cron.
+
+jobs:
+  run-worker:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar el codigo del repo
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Reconstruir credenciales desde los Secrets
+        run: |
+          mkdir -p credentials
+          echo "${{ secrets.CLIENT_SECRET_JSON }}" | base64 -d > credentials/client_secret.json
+          echo "${{ secrets.TOKEN_IMGONNAGOVIRAL }}" | base64 -d > credentials/token_Imgonnagoviral.pickle
+
+      - name: Correr el worker
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python worker.py

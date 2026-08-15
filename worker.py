@@ -19,6 +19,7 @@ import os
 import sys
 import traceback
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 from supabase import create_client, Client
@@ -29,6 +30,14 @@ load_dotenv()
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+
+# Zona horaria de referencia para comparar horarios, sin importar si el
+# worker corre en tu PC (hora local) o en GitHub Actions (UTC).
+ZONA_HORARIA = ZoneInfo("America/Lima")
+
+
+def ahora() -> datetime:
+    return datetime.now(ZONA_HORARIA)
 
 # Margen de tolerancia: si el worker corre cada 10 minutos, un horario
 # "coincide" si esta dentro de los ultimos N minutos desde la ultima
@@ -49,7 +58,7 @@ def conectar_supabase() -> Client:
 
 def dia_iso_actual() -> int:
     """Python: lunes=0 ... domingo=6. Nuestro schema usa lunes=1 ... domingo=7."""
-    return datetime.now().isoweekday()
+    return ahora().isoweekday()
 
 
 def horario_coincide_ahora(hora_str: str, dias_semana: list[int]) -> bool:
@@ -57,27 +66,27 @@ def horario_coincide_ahora(hora_str: str, dias_semana: list[int]) -> bool:
     Determina si un horario (ej. '14:30:00') debe dispararse en este
     momento, dado el margen de tolerancia de TOLERANCIA_MINUTOS.
     """
-    ahora = datetime.now()
+    momento_actual = ahora()
 
-    if ahora.isoweekday() not in dias_semana:
+    if momento_actual.isoweekday() not in dias_semana:
         return False
 
     hora_horario = datetime.strptime(hora_str, "%H:%M:%S").time()
-    objetivo = ahora.replace(
+    objetivo = momento_actual.replace(
         hour=hora_horario.hour,
         minute=hora_horario.minute,
         second=0,
         microsecond=0,
     )
 
-    diferencia = ahora - objetivo
+    diferencia = momento_actual - objetivo
     return timedelta(0) <= diferencia <= timedelta(minutes=TOLERANCIA_MINUTOS)
 
 
 def ya_se_publico_hoy(supabase: Client, horario_id: str) -> bool:
     """Evita publicar dos veces el mismo horario el mismo dia si el
     worker corre varias veces dentro del margen de tolerancia."""
-    hoy = datetime.now().date().isoformat()
+    hoy = ahora().date().isoformat()
     resultado = (
         supabase.table("publicaciones")
         .select("id")
@@ -99,7 +108,7 @@ def procesar_horario(supabase: Client, canal: dict, horario: dict):
                 "canal_id": canal["id"],
                 "horario_id": horario["id"],
                 "estado": "procesando",
-                "fecha_programada": datetime.now().isoformat(),
+                "fecha_programada": ahora().isoformat(),
             }
         )
         .execute()
@@ -123,7 +132,7 @@ def procesar_horario(supabase: Client, canal: dict, horario: dict):
         supabase.table("publicaciones").update(
             {
                 "estado": "publicado",
-                "fecha_ejecucion": datetime.now().isoformat(),
+                "fecha_ejecucion": ahora().isoformat(),
                 "views_capturadas": views,
                 "url_video_resultante": url_pendiente,
                 "log": "Views reales obtenidas OK. Falta captura/video/subida real.",
@@ -137,7 +146,7 @@ def procesar_horario(supabase: Client, canal: dict, horario: dict):
         supabase.table("publicaciones").update(
             {
                 "estado": "error",
-                "fecha_ejecucion": datetime.now().isoformat(),
+                "fecha_ejecucion": ahora().isoformat(),
                 "log": error_texto,
             }
         ).eq("id", publicacion_id).execute()
@@ -145,7 +154,7 @@ def procesar_horario(supabase: Client, canal: dict, horario: dict):
 
 
 def main():
-    print(f"[{datetime.now()}] Worker iniciado")
+    print(f"[{ahora()}] Worker iniciado")
 
     try:
         supabase = conectar_supabase()
@@ -183,7 +192,7 @@ def main():
 
             procesar_horario(supabase, canal, horario)
 
-    print(f"[{datetime.now()}] Worker terminado\n")
+    print(f"[{ahora()}] Worker terminado\n")
 
 
 if __name__ == "__main__":
